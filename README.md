@@ -54,21 +54,32 @@ randomly oriented cubic grains).
 ## Benchmark
 
 Spherical inclusion (volume fraction ≈ 11 %, Young's modulus contrast 100) in a **512³** grid,
-NVIDIA RTX 6000 Ada (48 GB), Float32, Barzilai-Borwein acceleration, `tol = 1e-6`.
-Times exclude compilation and microstructure generation.
+Float32, Barzilai-Borwein acceleration, `tol = 1e-6`. Times exclude compilation and
+microstructure generation.
 
-| Green operator | Loading | Iterations | Time [s] | ms / iteration |
-|---|---|---:|---:|---:|
-| Moulinec-Suquet (`:continuous`) | strain E11 | 54 | 6.9 | 128 |
-| Moulinec-Suquet (`:continuous`) | stress S11 | 86 | 11.6 | 135 |
-| staggered grid (`:staggered`) | strain E11 | 51 | 6.8 | 134 |
-| staggered grid (`:staggered`) | stress S11 | 104 | 14.7 | 141 |
+- GPU: NVIDIA RTX 6000 Ada (48 GB)
+- CPU: AMD Ryzen Threadripper PRO 7985WX, 64 cores (64 Julia threads, 64 FFTW threads)
 
-GPU memory used: 14.1 GiB (≈ 113 bytes per voxel: 18 real and 6 half-size complex fields, plus cuFFT plans). Reproduce with:
+| Green operator | Loading | Iterations GPU | Time GPU [s] | Iterations CPU | Time CPU [s] | Speed-up GPU / CPU |
+|---|---|---:|---:|---:|---:|---:|
+| Moulinec-Suquet (`:continuous`) | strain E11 | 54 | 6.9 | 61 | 158.2 | 22.9× |
+| Moulinec-Suquet (`:continuous`) | stress S11 | 79 | 10.7 | 81 | 234.7 | 22.0× |
+| staggered grid (`:staggered`) | strain E11 | 51 | 6.8 | 49 | 132.6 | 19.4× |
+| staggered grid (`:staggered`) | stress S11 | 103 | 14.5 | 87 | 262.5 | 18.1× |
+
+Per iteration: 128–141 ms on GPU, 2.6–3.0 s on CPU. GPU memory used: 14.1 GiB
+(≈ 113 bytes per voxel: 18 real and 6 half-size complex fields, plus cuFFT plans).
+
+GPU and CPU macroscopic responses (mean strain and stress) agree within 1.5e-6 relative.
+Iteration counts differ slightly because Float32 round-off differs between cuFFT and FFTW,
+and the Barzilai-Borwein step amplifies these small differences along the iterations.
+
+Reproduce with:
 
 ```bash
 julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-julia --project=benchmark benchmark/benchmark_512.jl        # optional grid size argument
+julia -t auto --project=benchmark benchmark/benchmark_512.jl            # n = 512, gpu and cpu
+julia -t auto --project=benchmark benchmark/benchmark_512.jl 256 gpu    # other size / device
 ```
 
 ## Tests
