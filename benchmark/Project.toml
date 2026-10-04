@@ -1,0 +1,6 @@
+[deps]
+BasicFFTGPU = "8c1f4d2e-5b7a-4e3c-9a61-2f0d7b3e9c45"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+
+[sources]
+BasicFFTGPU = {path = ".."}

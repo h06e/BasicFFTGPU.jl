@@ -51,6 +51,26 @@ In-memory arrays work too: `PhaseMaterials(phases, materials; grid)`,
 [examples/anisotropic_polycrystal.jl](examples/anisotropic_polycrystal.jl) (Voronoi polycrystal of
 randomly oriented cubic grains).
 
+## Benchmark
+
+Spherical inclusion (volume fraction ≈ 11 %, Young's modulus contrast 100) in a **512³** grid,
+NVIDIA RTX 6000 Ada (48 GB), Float32, Barzilai-Borwein acceleration, `tol = 1e-6`.
+Times exclude compilation and microstructure generation.
+
+| Green operator | Loading | Iterations | Time [s] | ms / iteration |
+|---|---|---:|---:|---:|
+| Moulinec-Suquet (`:continuous`) | strain E11 | 54 | 6.9 | 128 |
+| Moulinec-Suquet (`:continuous`) | stress S11 | 86 | 11.6 | 135 |
+| staggered grid (`:staggered`) | strain E11 | 51 | 6.8 | 134 |
+| staggered grid (`:staggered`) | stress S11 | 104 | 14.7 | 141 |
+
+GPU memory used: 14.1 GiB (≈ 27 bytes per voxel). Reproduce with:
+
+```bash
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+julia --project=benchmark benchmark/benchmark_512.jl        # optional grid size argument
+```
+
 ## Tests
 
 ```julia
