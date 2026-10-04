@@ -64,7 +64,7 @@ Times exclude compilation and microstructure generation.
 | staggered grid (`:staggered`) | strain E11 | 51 | 6.8 | 134 |
 | staggered grid (`:staggered`) | stress S11 | 104 | 14.7 | 141 |
 
-GPU memory used: 14.1 GiB (≈ 27 bytes per voxel). Reproduce with:
+GPU memory used: 14.1 GiB (≈ 113 bytes per voxel: 18 real and 6 half-size complex fields, plus cuFFT plans). Reproduce with:
 
 ```bash
 julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
