@@ -1,0 +1,31 @@
+name = "BasicFFTGPU"
+uuid = "8c1f4d2e-5b7a-4e3c-9a61-2f0d7b3e9c45"
+version = "0.1.0"
+authors = ["valmalette <valmalette@lma.cnrs-mrs.fr>"]
+
+[deps]
+AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+ReadVTK = "dc215faf-f008-4882-a9f7-a79a826fadc3"
+WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
+
+[compat]
+AbstractFFTs = "1.5.0"
+CUDA = "6.4.2"
+FFTW = "1.10.0"
+KernelAbstractions = "0.9.43"
+LinearAlgebra = "1"
+Printf = "1"
+ReadVTK = "0.2.6"
+WriteVTK = "1.22.0"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
