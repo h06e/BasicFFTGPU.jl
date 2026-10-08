@@ -14,9 +14,11 @@ Barzilai-Borwein step), stiffness eigenvalues are the Kelvin moduli, and a rotat
 acts through the orthogonal 6x6 matrix `rotation_kelvin(R)` (`rotate_stiffness`).
 Loadings, `mean_strain`, `mean_stress` and the `strain`/`stress` fields are Kelvin vectors.
 
-The only non-Kelvin output is the `strain`/`stress` arrays of the `.vti` export, which
-hold plain tensor components in ParaView's symmetric-tensor order (XX YY ZZ XY YZ XZ) so
-that ParaView computes eigenvalues correctly; `strain_kelvin`/`stress_kelvin` are written too.
+The only non-Kelvin outputs are in the `.vti` export: the scalar fields `strain_ij`,
+`stress_ij` (and `plastic_strain_ij`), one per tensor component, and the `strain`/`stress`
+arrays, which hold plain tensor components in ParaView's symmetric-tensor order
+(XX YY ZZ XY YZ XZ) so that ParaView computes eigenvalues correctly;
+`strain_kelvin`/`stress_kelvin` are written too.
 
 ## Grid and frequencies
 
@@ -39,7 +41,15 @@ stress-controlled components `s`, the mean part `-(C0_ss)^-1 (S_s - <sigma>_s)`.
 `rho` is the Barzilai-Borwein step (`accelerate=true`) or 1 (basic scheme).
 
 Convergence: `sqrt(<|Gamma0 sigma|^2>) / |<eps>| < tol` and, if some components are
-stress controlled, `|<sigma>_s - S_s| / |<sigma>| < tol`.
+stress controlled, `|<sigma>_s - S_s| / |<sigma>| < tol`. For plastic materials the mean strain can
+vanish (unloading), so `|<eps>|` is replaced by the rms strain `sqrt(<eps:eps>)`.
+
+## Plasticity (`VoxelPlasticMaterials`)
+
+Committed state `(eps_p_n, p_n)`, trial state `(eps_p, p)` recomputed at every stress
+evaluation by radial return from the committed one; `commit!(ws)` copies trial to
+committed. Return mapping: Newton on `q_trial - 3 mu dp = R(p_n + dp)`, monotone since
+`R` is concave. The reference medium uses the elastic constants.
 
 ## Reference medium
 

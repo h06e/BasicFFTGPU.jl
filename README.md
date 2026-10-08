@@ -10,6 +10,7 @@ microstructures, on CPU (FFTW) or NVIDIA GPU (cuFFT).
 - materials from a phase map + material list (isotropic or anisotropic), or voxel-wise
   isotropic constants read from a `.vti` file
 - basic scheme with optional Barzilai-Borwein acceleration (default on)
+- voxel-wise J2 elastoplasticity with Voce isotropic hardening, incremental loading
 
 ## Install
 
@@ -50,6 +51,24 @@ In-memory arrays work too: `PhaseMaterials(phases, materials; grid)`,
 [examples/sphere_inclusion.jl](examples/sphere_inclusion.jl) and
 [examples/anisotropic_polycrystal.jl](examples/anisotropic_polycrystal.jl) (Voronoi polycrystal of
 randomly oriented cubic grains).
+
+## Elastoplasticity
+
+`VoxelPlasticMaterials`: small-strain J2 plasticity, isotropic hardening
+`R(p) = sigma0 + H p + Q (1 - exp(-b p))`, radial return per voxel. Constants are 3D arrays
+or scalars. Solve load increments on one workspace, warm-started from the previous
+increment, and commit the internal state after each one:
+
+```julia
+mat = VoxelPlasticMaterials(E=E_field, nu=0.3, sigma0=s0_field, Q=200.0, b=20.0, H=0.0)
+ws = Workspace(mat; device=CuArray)
+for e in range(0, 0.01; length=21)[2:end]
+    r = solve!(ws, StrainLoading([e, 0, 0, 0, 0, 0]); warm_start=true)
+    commit!(ws)                                   # plastic state of this increment -> reference
+end
+p = cumulated_plastic_strain(ws); εp = plastic_strain(ws)
+write_vtk("step", r; material=mat, workspace=ws)  # + plastic_strain, cumulated_plastic_strain
+```
 
 ## Benchmark
 

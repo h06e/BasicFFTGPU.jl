@@ -93,6 +93,54 @@ sphere(n, r) = [(i - n / 2 - 0.5)^2 + (j - n / 2 - 0.5)^2 + (k - n / 2 - 0.5)^2 
         @test solve(an, load; precision=Float64, tol=1e-10).mean_stress ≈ ref.mean_stress rtol = 1e-7
     end
 
+    @testset "elastoplasticity (J2, Voce)" begin
+        # uniform material under uniaxial stress: sigma11 = R(p), p = eps11 - sigma11 / E
+        E, nu, s0, Q, b, H = 200.0, 0.3, 1.0, 0.5, 50.0, 2.0
+        R(p) = s0 + H * p + Q * (1 - exp(-b * p))
+        pm = VoxelPlasticMaterials(E=fill(E, 4, 4, 4), nu=nu, sigma0=s0, Q=Q, b=b, H=H)
+        ws = Workspace(pm; precision=Float64)
+        uniax(e) = MixedLoading([e, 0, 0, 0, 0, 0], (false, true, true, true, true, true))
+        local r
+        for e in range(0, 0.02; length=11)[2:end]
+            r = solve!(ws, uniax(e); tol=1e-10, warm_start=true)
+            commit!(ws)
+        end
+        σ11 = r.mean_stress[1]
+        @test r.converged
+        @test σ11 ≈ R(0.02 - σ11 / E) rtol = 1e-8
+        @test all(cumulated_plastic_strain(ws) .≈ 0.02 - σ11 / E)
+        @test plastic_strain(ws)[1, 1, 1, 2] ≈ -plastic_strain(ws)[1, 1, 1, 1] / 2   # isochoric
+        # elastic unloading, then back to zero strain
+        r2 = solve!(ws, uniax(0.019); tol=1e-10, warm_start=true)
+        @test r2.mean_stress[1] ≈ σ11 - 0.001E rtol = 1e-8
+        r3 = solve!(ws, uniax(0.0); tol=1e-10, warm_start=true)
+        @test r3.converged && r3.mean_stress[1] < 0
+
+        # very high yield stress: elastic solution of VoxelMaterials
+        ph = sphere(16, 5)
+        Ev = [p == 1 ? 50.0 : 1.0 for p in ph]
+        load = StrainLoading([0.0, 0.01, 0, 0, 0, 0])
+        ref = solve(VoxelMaterials(E=Ev, nu=0.3), load; precision=Float64, tol=1e-10)
+        rel = solve(VoxelPlasticMaterials(E=Ev, nu=0.3, sigma0=1e6), load; precision=Float64, tol=1e-10)
+        @test rel.mean_stress ≈ ref.mean_stress
+
+        # soft plastic matrix around a stiff elastic sphere: converges, no commit -> same answer
+        pm = VoxelPlasticMaterials(E=Ev, nu=0.3, sigma0=[p == 1 ? 1e6 : 0.005 for p in ph], Q=0.005, b=20.0)
+        ws = Workspace(pm; precision=Float64)
+        r1 = solve!(ws, StrainLoading([0.02, 0, 0, 0, 0, 0]); tol=1e-8)
+        r2 = solve!(ws, StrainLoading([0.02, 0, 0, 0, 0, 0]); tol=1e-8, warm_start=true)
+        @test r1.converged && r2.converged
+        @test r1.mean_stress ≈ r2.mean_stress rtol = 1e-6
+        p = cumulated_plastic_strain(ws)
+        @test maximum(p[ph .== 1]) == 0 && maximum(p) > 0
+        mktempdir() do dir
+            write_vtk(joinpath(dir, "plastic"), r2; material=pm, workspace=ws, fields=Dict("x" => p))
+            img = read_vtk(joinpath(dir, "plastic.vti"))
+            @test img["plastic_strain_12"] ≈ plastic_strain(ws)[:, :, :, 6] ./ sqrt(2)
+            @test img["cumulated_plastic_strain"] ≈ p && img["x"] ≈ p
+        end
+    end
+
     @testset "VTK round trip" begin
         mktempdir() do dir
             ph = sphere(8, 3)
@@ -111,6 +159,8 @@ sphere(n, r) = [(i - n / 2 - 0.5)^2 + (j - n / 2 - 0.5)^2 + (k - n / 2 - 0.5)^2 
             @test img["stress_kelvin"][4, :, :, :] ≈ r.stress[:, :, :, 4]
             @test img["stress"][5, :, :, :] ≈ r.stress[:, :, :, 4] ./ sqrt(2)  # ParaView YZ = sigma_23
             @test img["phase"] == ph
+            @test img["stress_11"] ≈ r.stress[:, :, :, 1]
+            @test img["stress_23"] ≈ r.stress[:, :, :, 4] ./ sqrt(2)
         end
     end
 end

@@ -1,4 +1,4 @@
-export VoxelGrid, Isotropic, Anisotropic, PhaseMaterials, VoxelMaterials, gridsize
+export VoxelGrid, Isotropic, Anisotropic, PhaseMaterials, VoxelMaterials, VoxelPlasticMaterials, gridsize
 
 """
     VoxelGrid(size; spacing=(1,1,1), origin=(0,0,0))
@@ -134,10 +134,53 @@ function VoxelMaterials(; kappa=nothing, mu=nothing, E=nothing, nu=nothing, lamb
     return VoxelMaterials(Float64.(k), Float64.(m), g)
 end
 
+"""
+    VoxelPlasticMaterials(; E, nu, sigma0, Q=0, b=0, H=0, grid=...)
+
+Voxel-wise J2 (von Mises) elastoplasticity with isotropic hardening, small strains.
+Elasticity is given as for [`VoxelMaterials`](@ref) (`kappa, mu`, `E, nu` or `lambda, mu`).
+The yield stress depends on the cumulated plastic strain `p` (Voce law plus a linear term):
+
+    R(p) = sigma0 + H p + Q (1 - exp(-b p))
+
+Each constant is a 3D array or a scalar (same value in every voxel). The material has a
+history: solve successive load increments on one [`Workspace`](@ref) and call
+[`commit!`](@ref) after each converged increment.
+"""
+struct VoxelPlasticMaterials <: MaterialDistribution
+    kappa::Array{Float64,3}
+    mu::Array{Float64,3}
+    sigma0::Array{Float64,3}
+    Q::Array{Float64,3}
+    b::Array{Float64,3}
+    H::Array{Float64,3}
+    grid::VoxelGrid
+end
+
+function VoxelPlasticMaterials(; kappa=nothing, mu=nothing, E=nothing, nu=nothing, lambda=nothing,
+                               sigma0, Q=0.0, b=0.0, H=0.0, grid=nothing)
+    arrays = filter(x -> x isa AbstractArray, [kappa, mu, E, nu, lambda, sigma0, Q, b, H])
+    grid === nothing && isempty(arrays) && throw(ArgumentError("give `grid` when every constant is a scalar"))
+    sz = grid === nothing ? size(first(arrays)) : grid.size
+    field(x, name) = if x isa Real
+        fill(Float64(x), sz)
+    else
+        size(x) == sz || throw(DimensionMismatch("$name has size $(size(x)), expected $sz"))
+        Float64.(x)
+    end
+    opt(x, name) = x === nothing ? nothing : field(x, name)
+    el = VoxelMaterials(; kappa=opt(kappa, "kappa"), mu=opt(mu, "mu"), E=opt(E, "E"), nu=opt(nu, "nu"),
+                        lambda=opt(lambda, "lambda"), grid=grid)
+    s0, q, bb, h = field(sigma0, "sigma0"), field(Q, "Q"), field(b, "b"), field(H, "H")
+    (all(>=(0), s0) && all(>=(0), q) && all(>=(0), bb) && all(>=(0), h)) ||
+        throw(ArgumentError("sigma0, Q, b and H must be non-negative"))
+    return VoxelPlasticMaterials(el.kappa, el.mu, s0, q, bb, h, el.grid)
+end
+
 gridsize(m::MaterialDistribution) = m.grid.size
 
 """
-Isotropic reference medium (kappa0, mu0). For isotropic constituents, each
+Isotropic reference medium (kappa0, mu0), from the elastic constants. For isotropic constituents, each
 modulus is the midpoint of its extreme values (as in Moulinec & Suquet / Kairotop).
 With anisotropic phases, the midpoint of the extreme Kelvin moduli (eigenvalues
 of the Kelvin stiffness matrix) is used for both 3*kappa0 and 2*mu0.
@@ -153,7 +196,7 @@ function reference_medium(m::PhaseMaterials)
     return l0 / 3, l0 / 2
 end
 
-function reference_medium(m::VoxelMaterials)
+function reference_medium(m::Union{VoxelMaterials,VoxelPlasticMaterials})
     kmin, kmax = extrema(m.kappa)
     mmin, mmax = extrema(m.mu)
     return (kmin + kmax) / 2, (mmin + mmax) / 2

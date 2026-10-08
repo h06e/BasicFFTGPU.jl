@@ -107,10 +107,12 @@ end
 Write voxel fields as cell data of a VTK ImageData file (`.vti` is appended by
 WriteVTK). Values are `nx x ny x nz` arrays (scalars) or `n x nx x ny x nz`
 arrays (`n`-component). Returns the list of written files.
+`compress`: zlib level (0-9) or `false`. Off by default: on large grids
+compression costs far more time than the disk space it saves.
 """
-function write_vtk(path::AbstractString, fields::AbstractDict, grid::VoxelGrid)
+function write_vtk(path::AbstractString, fields::AbstractDict, grid::VoxelGrid; compress=false)
     nx, ny, nz = grid.size
-    vtk_grid(path, nx + 1, ny + 1, nz + 1; origin=grid.origin, spacing=grid.spacing) do vtk
+    vtk_grid(path, nx + 1, ny + 1, nz + 1; origin=grid.origin, spacing=grid.spacing, compress=compress) do vtk
         for (name, f) in fields
             vtk[String(name), VTKCellData()] = f
         end
@@ -120,6 +122,17 @@ end
 # ParaView reads 6-component arrays as symmetric tensors of plain tensor
 # components ordered XX YY ZZ XY YZ XZ: Kelvin component, and its scale.
 const PARAVIEW_FROM_KELVIN = ((1, 1.0), (2, 1.0), (3, 1.0), (6, 1 / sqrt(2.0)), (4, 1 / sqrt(2.0)), (5, 1 / sqrt(2.0)))
+
+"Kelvin field (nx,ny,nz,6) -> one scalar field per tensor component: `name_11`, ..., `name_12`."
+function tensor_components!(out, name, f::AbstractArray{T,4}) where {T<:Real}
+    for k in 1:3
+        out["$(name)_$k$k"] = f[:, :, :, k]
+    end
+    for (k, (i, j)) in enumerate(KELVIN_SHEAR)
+        out["$(name)_$i$j"] = f[:, :, :, k+3] .* T(1 / sqrt(2.0))
+    end
+    return out
+end
 
 "Kelvin field (nx,ny,nz,6) -> ParaView symmetric tensor array (6,nx,ny,nz)."
 function paraview_tensor(f::AbstractArray{T,4}) where {T<:Real}
